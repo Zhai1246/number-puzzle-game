@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多人数字解谜</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .game-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .players-section {
+            margin-bottom: 20px;
+        }
+        
+        .players-list {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .player {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 5px;
+            min-width: 120px;
+            transition: all 0.3s ease;
+        }
+        
+        .player.active {
+            border: 2px solid #2196F3;
+            background-color: #e3f2fd;
+        }
+        
+        .player-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .player-moves {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 20px auto;
+            max-width: 400px;
+        }
+        
+        .tile {
+            aspect-ratio: 1;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .tile:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        
+        .tile.empty {
+            background-color: #e0e0e0;
+            cursor: default;
+        }
+        
+        .tile.empty:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        
+        button {
+            padding: 10px 20px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #2196F3;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        button:hover {
+            background-color: #0b7dda;
+        }
+        
+        .info {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #666;
+        }
+        
+        .message {
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        
+        .current-player {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #2196F3;
+        }
+        
+        .game-mode {
+            margin: 15px 0;
+        }
+        
+        .mode-btn {
+            background-color: #9c27b0;
+        }
+        
+        .mode-btn:hover {
+            background-color: #7b1fa2;
+        }
+        
+        .mode-btn.active {
+            background-color: #673ab7;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>多人数字解谜</h1>
+        
+        <div class="game-mode">
+            <button class="mode-btn active" data-mode="turn-based">轮流模式</button>
+            <button class="mode-btn" data-mode="coop">合作模式</button>
+        </div>
+        
+        <div class="current-player" id="currentPlayer">当前玩家: 玩家 1</div>
+        
+        <div class="players-section">
+            <div class="players-list" id="playersList">
+                <!-- 玩家列表将通过JS动态生成 -->
+            </div>
+        </div>
+        
+        <div class="game-board" id="gameBoard"></div>
+        
+        <div class="controls">
+            <button id="newGame">新游戏</button>
+            <button id="hint">提示</button>
+            <button id="nextPlayer">下一玩家</button>
+        </div>
+        
+        <div class="info">
+            <div>总步数: <span id="totalMoves">0</span></div>
+            <div class="message" id="message"></div>
+        </div>
+    </div>
+    
+    <script>
+        const boardSize = 4;
+        let board = [];
+        let emptyPos = { row: 3, col: 3 };
+        let totalMoves = 0;
+        let isGameOver = false;
+        let gameMode = 'turn-based'; // 轮流模式或合作模式
+        
+        // 玩家信息
+        const players = [
+            { id: 1, name: '玩家 1', moves: 0, color: '#f44336' },
+            { id: 2, name: '玩家 2', moves: 0, color: '#4CAF50' },
+            { id: 3, name: '玩家 3', moves: 0, color: '#2196F3' },
+            { id: 4, name: '玩家 4', moves: 0, color: '#ff9800' },
+            { id: 5, name: '玩家 5', moves: 0, color: '#9c27b0' }
+        ];
+        
+        let currentPlayerIndex = 0;
+        
+        function initBoard() {
+            // 创建初始有序数组
+            let numbers = Array.from({ length: boardSize * boardSize }, (_, i) => i + 1);
+            numbers[numbers.length - 1] = 0; // 0 表示空格
+            
+            // 随机打乱数组
+            shuffleArray(numbers);
+            
+            // 检查是否可解
+            while (!isSolvable(numbers)) {
+                shuffleArray(numbers);
+            }
+            
+            // 构建游戏板
+            board = [];
+            for (let i = 0; i < boardSize; i++) {
+                board[i] = [];
+                for (let j = 0; j < boardSize; j++) {
+                    const value = numbers[i * boardSize + j];
+                    board[i][j] = value;
+                    if (value === 0) {
+                        emptyPos = { row: i, col: j };
+                    }
+                }
+            }
+            
+            // 重置游戏状态
+            totalMoves = 0;
+            isGameOver = false;
+            currentPlayerIndex = 0;
+            
+            // 重置玩家步数
+            players.forEach(player => {
+                player.moves = 0;
+            });
+            
+            updateUI();
+            document.getElementById('message').textContent = '';
+        }
+        
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+        
+        function isSolvable(puzzle) {
+            let inversions = 0;
+            let emptyRow = 0;
+            
+            for (let i = 0; i < puzzle.length; i++) {
+                if (puzzle[i] === 0) {
+                    emptyRow = Math.floor(i / boardSize) + 1;
+                    continue;
+                }
+                
+                for (let j = i + 1; j < puzzle.length; j++) {
+                    if (puzzle[j] !== 0 && puzzle[i] > puzzle[j]) {
+                        inversions++;
+                    }
+                }
+            }
+            
+            if (boardSize % 2 === 1) {
+                return inversions % 2 === 0;
+            } else {
+                return (inversions + emptyRow) % 2 === 1;
+            }
+        }
+        
+        function updateUI() {
+            // 更新玩家列表
+            const playersList = document.getElementById('playersList');
+            playersList.innerHTML = '';
+            
+            players.forEach((player, index) => {
+                const playerEl = document.createElement('div');
+                playerEl.className = `player ${index === currentPlayerIndex ? 'active' : ''}`;
+                playerEl.style.borderColor = player.color;
+                playerEl.innerHTML = `
+                    <div class="player-name" style="color: ${player.color};">${player.name}</div>
+                    <div class="player-moves">步数: ${player.moves}</div>
+                `;
+                playersList.appendChild(playerEl);
+            });
+            
+            // 更新当前玩家显示
+            document.getElementById('currentPlayer').textContent = `当前玩家: ${players[currentPlayerIndex].name}`;
+            
+            // 更新游戏板
+            const gameBoard = document.getElementById('gameBoard');
+            gameBoard.innerHTML = '';
+            
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+                    if (board[i][j] === 0) {
+                        tile.classList.add('empty');
+                    } else {
+                        tile.textContent = board[i][j];
+                        tile.addEventListener('click', () => handleTileClick(i, j));
+                    }
+                    gameBoard.appendChild(tile);
+                }
+            }
+            
+            // 更新总步数
+            document.getElementById('totalMoves').textContent = totalMoves;
+        }
+        
+        function handleTileClick(row, col) {
+            if (isGameOver) return;
+            
+            // 检查点击的 tiles 是否与空格相邻
+            if (isAdjacent(row, col, emptyPos.row, emptyPos.col)) {
+                // 交换 tiles
+                [board[row][col], board[emptyPos.row][emptyPos.col]] = [board[emptyPos.row][emptyPos.col], board[row][col]];
+                emptyPos = { row, col };
+                totalMoves++;
+                
+                // 在轮流模式下，增加当前玩家的步数
+                if (gameMode === 'turn-based') {
+                    players[currentPlayerIndex].moves++;
+                }
+                
+                updateUI();
+                
+                // 检查是否完成
+                if (checkWin()) {
+                    isGameOver = true;
+                    let message = '';
+                    
+                    if (gameMode === 'turn-based') {
+                        // 找出步数最少的玩家
+                        const winner = players.reduce((min, player) => 
+                            player.moves < min.moves ? player : min
+                        );
+                        message = `游戏完成！获胜者: ${winner.name}，步数: ${winner.moves}`;
+                    } else {
+                        message = `游戏完成！总步数: ${totalMoves}`;
+                    }
+                    
+                    document.getElementById('message').textContent = message;
+                }
+            }
+        }
+        
+        function isAdjacent(row1, col1, row2, col2) {
+            const rowDiff = Math.abs(row1 - row2);
+            const colDiff = Math.abs(col1 - col2);
+            return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
+        }
+        
+        function checkWin() {
+            let expected = 1;
+            for (let i = 0; i < boardSize; i++) {
+                for (let j = 0; j < boardSize; j++) {
+                    if (i === boardSize - 1 && j === boardSize - 1) {
+                        return board[i][j] === 0;
+                    }
+                    if (board[i][j] !== expected) {
+                        return false;
+                    }
+                    expected++;
+                }
+            }
+            return true;
+        }
+        
+        function getHint() {
+            if (isGameOver) return;
+            
+            // 简单的提示算法：找到一个可移动的 tiles
+            const directions = [{ row: -1, col: 0 }, { row: 1, col: 0 }, { row: 0, col: -1 }, { row: 0, col: 1 }];
+            
+            for (const dir of directions) {
+                const newRow = emptyPos.row + dir.row;
+                const newCol = emptyPos.col + dir.col;
+                
+                if (newRow >= 0 && newRow < boardSize && newCol >= 0 && newCol < boardSize) {
+                    const tile = document.querySelectorAll('.tile')[newRow * boardSize + newCol];
+                    if (tile && !tile.classList.contains('empty')) {
+                        tile.style.backgroundColor = '#ff9800';
+                        setTimeout(() => {
+                            tile.style.backgroundColor = '#4CAF50';
+                        }, 1000);
+                        return;
+                    }
+                }
+            }
+        }
+        
+        function nextPlayer() {
+            if (isGameOver) return;
+            
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            updateUI();
+            document.getElementById('message').textContent = `现在轮到 ${players[currentPlayerIndex].name} 了！`;
+        }
+        
+        function setGameMode(mode) {
+            gameMode = mode;
+            
+            // 更新模式按钮状态
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.mode === mode) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            // 重置游戏
+            initBoard();
+        }
+        
+        // 事件监听器
+        document.getElementById('newGame').addEventListener('click', initBoard);
+        document.getElementById('hint').addEventListener('click', getHint);
+        document.getElementById('nextPlayer').addEventListener('click', nextPlayer);
+        
+        // 游戏模式切换
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                setGameMode(btn.dataset.mode);
+            });
+        });
+        
+        // 开始新游戏
+        initBoard();
+    </script>
+</body>
+</html>
